@@ -11,6 +11,7 @@
 
 import { Bezier } from './bezier';
 import { BasicPoint, Point } from './point';
+import { SignatureEventTarget } from './signature_event_target';
 import { throttle } from './throttle';
 
 declare global {
@@ -37,10 +38,10 @@ export interface Options extends Partial<PointGroupOptions> {
   velocityFilterWeight?: number;
   backgroundColor?: string;
   throttle?: number;
-  colorChange?:boolean;
+  colorChange?: boolean;
   colorChangeThreeshold?: number;
-  widthChange?:boolean;
-  widthMultiplier? : number;
+  widthChange?: boolean;
+  widthMultiplier?: number;
 }
 
 export interface PointGroup extends PointGroupOptions {
@@ -113,7 +114,7 @@ export interface IsoData {
   };
 }
 
-export default class SignaturePad extends EventTarget {
+export default class SignaturePad extends SignatureEventTarget {
   // Public stuff
   public dotSize: number;
   public minWidth: number;
@@ -123,10 +124,10 @@ export default class SignaturePad extends EventTarget {
   public velocityFilterWeight: number;
   public backgroundColor: string;
   public throttle: number;
-  public colorChange : boolean;
-  public colorChangeThreeshold : number;
-  public widthChange : boolean;
-  public widthMultiplier : number;
+  public colorChange: boolean;
+  public colorChangeThreeshold: number;
+  public widthChange: boolean;
+  public widthMultiplier: number;
 
   // Private stuff
   /* tslint:disable: variable-name */
@@ -140,13 +141,10 @@ export default class SignaturePad extends EventTarget {
   private _strokeMoveUpdate: (event: SignatureEvent) => void;
   /* tslint:enable: variable-name */
 
-  private _aktPressure : number;
-  private _pointerType : string;
+  private _aktPressure: number;
+  private _pointerType: string;
 
-  constructor(
-    private canvas: HTMLCanvasElement,
-    options: Options = {},
-  ) {
+  constructor(private canvas: HTMLCanvasElement, options: Options = {}) {
     super();
     this.velocityFilterWeight = options.velocityFilterWeight || 0.7;
     this.minWidth = options.minWidth || 0.5;
@@ -234,10 +232,12 @@ export default class SignaturePad extends EventTarget {
     // Disable panning/zooming when touching canvas element
     this.canvas.style.touchAction = 'none';
     this.canvas.style.msTouchAction = 'none';
+    this.canvas.style.userSelect = 'none';
 
-    const isIOS =/Macintosh/.test(navigator.userAgent) && 'ontouchstart' in document;
+    const isIOS =
+      /Macintosh/.test(navigator.userAgent) && 'ontouchstart' in document;
 
-    // The "Scribble" feature of iOS intercepts point events. So that we can lose some of them when tapping rapidly. 
+    // The "Scribble" feature of iOS intercepts point events. So that we can lose some of them when tapping rapidly.
     // Use touch events for iOS platforms to prevent it. See https://developer.apple.com/forums/thread/664108 for more information.
     if (window.PointerEvent && !isIOS) {
       this._handlePointerEvents();
@@ -254,6 +254,7 @@ export default class SignaturePad extends EventTarget {
     // Enable panning/zooming when touching canvas element
     this.canvas.style.touchAction = 'auto';
     this.canvas.style.msTouchAction = 'auto';
+    this.canvas.style.userSelect = 'auto';
 
     this.canvas.removeEventListener('pointerdown', this._handlePointerStart);
     this.canvas.removeEventListener('pointermove', this._handlePointerMove);
@@ -356,10 +357,9 @@ export default class SignaturePad extends EventTarget {
   };
 
   private _handlePointerEnd = (event: PointerEvent): void => {
-    this._drawningStroke = false;
-    const wasCanvasTouched = event.target === this.canvas;
-    if (wasCanvasTouched) {
+    if (this._drawningStroke) {
       event.preventDefault();
+      this._drawningStroke = false;
       this._strokeEnd(event);
     }
   };
@@ -401,8 +401,8 @@ export default class SignaturePad extends EventTarget {
         : (event as Touch).force !== undefined
         ? (event as Touch).force
         : 0;
-    this._aktPressure=pressure;
-    this._pointerType=(<any>event).pointerType;
+    this._aktPressure = pressure;
+    this._pointerType = (<any>event).pointerType;
 
     const point = this._createPoint(x, y, pressure);
     const lastPointGroup = this._data[this._data.length - 1];
@@ -478,7 +478,7 @@ export default class SignaturePad extends EventTarget {
     this._lastPoints = [];
     this._lastVelocity = 0;
     this._lastWidth = (this.minWidth + this.maxWidth) / 2;
-    this._ctx.fillStyle = this.getColor(this.penColor,0);
+    this._ctx.fillStyle = this.getColor(this.penColor, 0);
   }
 
   private _createPoint(x: number, y: number, pressure: number): Point {
@@ -527,9 +527,8 @@ export default class SignaturePad extends EventTarget {
       (1 - this.velocityFilterWeight) * this._lastVelocity;
 
     let newWidth = this._strokeWidth(velocity);
-    if (this.widthChange&&this._pointerType==='pen')
-    {
-        newWidth+=this._aktPressure*this.widthMultiplier;
+    if (this.widthChange && this._pointerType === 'pen') {
+      newWidth += this._aktPressure * this.widthMultiplier;
     }
 
     const widths = {
@@ -563,7 +562,7 @@ export default class SignaturePad extends EventTarget {
     const drawSteps = Math.ceil(curve.length()) * 2;
 
     ctx.beginPath();
-    ctx.fillStyle = this.getColor(options.penColor,this._aktPressure);
+    ctx.fillStyle = this.getColor(options.penColor, this._aktPressure);
 
     for (let i = 0; i < drawSteps; i += 1) {
       // Calculate the Bezier (x, y) coordinate for this step.
@@ -588,9 +587,8 @@ export default class SignaturePad extends EventTarget {
         curve.startWidth + ttt * widthDelta,
         options.maxWidth,
       );
-      if (this.widthChange&&this._pointerType==='pen')
-      {
-          width+=this._aktPressure*this.widthMultiplier;
+      if (this.widthChange && this._pointerType === 'pen') {
+        width += this._aktPressure * this.widthMultiplier;
       }
       this._drawCurveSegment(x, y, width);
     }
@@ -605,55 +603,54 @@ export default class SignaturePad extends EventTarget {
       options.dotSize > 0
         ? options.dotSize
         : (options.minWidth + options.maxWidth) / 2;
-    if (this.widthChange&&this._pointerType==='pen')
-    {
-        width+=this._aktPressure*this.widthMultiplier;
+    if (this.widthChange && this._pointerType === 'pen') {
+      width += this._aktPressure * this.widthMultiplier;
     }
 
     ctx.beginPath();
     this._drawCurveSegment(point.x, point.y, width);
     ctx.closePath();
-    ctx.fillStyle=this.getColor(options.penColor,this._aktPressure);
+    ctx.fillStyle = this.getColor(options.penColor, this._aktPressure);
     ctx.fill();
   }
 
-  private getColor(colorstring : string, pressure : number) {
+  private getColor(colorstring: string, pressure: number) {
+    if (this.colorChange && this._pointerType === 'pen') {
+      let color =
+        colorstring != '#000000'
+          ? this.ColorLuminance(colorstring, 1 - this.colorChangeThreeshold)
+          : '#AAAAAA';
 
-    if (this.colorChange&&this._pointerType==='pen')
-    {
-        let color = colorstring!='#000000'?this.ColorLuminance(colorstring,(1-this.colorChangeThreeshold)):'#AAAAAA';
+      if (pressure > this.colorChangeThreeshold) {
+        color = this.ColorLuminance(color, pressure * -1);
+      }
 
-        if (pressure>this.colorChangeThreeshold)
-        {
-            color = this.ColorLuminance(color,pressure*-1);
-        }
-       
-        return color;
-    }
-    else {
-        return colorstring;
+      return color;
+    } else {
+      return colorstring;
     }
   }
 
   private ColorLuminance(hex: string, lum: number) {
-
     // validate hex string
     hex = String(hex).replace(/[^0-9a-f]/gi, '');
     if (hex.length < 6) {
-        hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
     }
     lum = lum || 0;
 
     // convert to decimal and change luminosity
-    let rgb = "#", c, i;
+    let rgb = '#',
+      c,
+      i;
     for (i = 0; i < 3; i++) {
-        c = parseInt(hex.substr(i*2,2), 16);
-        c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
-        rgb += ("00"+c).substr(c.length);
+      c = parseInt(hex.substr(i * 2, 2), 16);
+      c = Math.round(Math.min(Math.max(0, c + c * lum), 255)).toString(16);
+      rgb += ('00' + c).substr(c.length);
     }
 
     return rgb;
-}
+  }
 
   private _fromData(
     pointGroups: PointGroup[],
@@ -741,8 +738,21 @@ export default class SignaturePad extends EventTarget {
             `${curve.control2.x.toFixed(3)},${curve.control2.y.toFixed(3)} ` +
             `${curve.endPoint.x.toFixed(3)},${curve.endPoint.y.toFixed(3)}`;
           path.setAttribute('d', attr);
-          path.setAttribute('stroke-width', this.widthChange&&this._pointerType==='pen'?(curve.endWidth * ((this.widthMultiplier* 2.25)*curve.endPoint.pressure)).toFixed(3):(curve.endWidth * 2.25).toFixed(3));
-          path.setAttribute('stroke', this.colorChange&&this._pointerType==='pen'?this.getColor(penColor,curve.endPoint.pressure):penColor);
+          path.setAttribute(
+            'stroke-width',
+            this.widthChange && this._pointerType === 'pen'
+              ? (
+                  curve.endWidth *
+                  (this.widthMultiplier * 2.25 * curve.endPoint.pressure)
+                ).toFixed(3)
+              : (curve.endWidth * 2.25).toFixed(3),
+          );
+          path.setAttribute(
+            'stroke',
+            this.colorChange && this._pointerType === 'pen'
+              ? this.getColor(penColor, curve.endPoint.pressure)
+              : penColor,
+          );
           path.setAttribute('fill', 'none');
           path.setAttribute('stroke-linecap', 'round');
 
@@ -754,11 +764,19 @@ export default class SignaturePad extends EventTarget {
       (point, { penColor, dotSize, minWidth, maxWidth }) => {
         const circle = document.createElement('circle');
         let size = dotSize > 0 ? dotSize : (minWidth + maxWidth) / 2;
-        size = this.widthChange&&this._pointerType==='pen'?size*point.pressure*(this.widthMultiplier* 2.25):size;
+        size =
+          this.widthChange && this._pointerType === 'pen'
+            ? size * point.pressure * (this.widthMultiplier * 2.25)
+            : size;
         circle.setAttribute('r', size.toString());
         circle.setAttribute('cx', point.x.toString());
         circle.setAttribute('cy', point.y.toString());
-        circle.setAttribute('fill', this.colorChange&&this._pointerType==='pen'?this.getColor(penColor,point.pressure):penColor);
+        circle.setAttribute(
+          'fill',
+          this.colorChange && this._pointerType === 'pen'
+            ? this.getColor(penColor, point.pressure)
+            : penColor,
+        );
 
         svg.appendChild(circle);
       },

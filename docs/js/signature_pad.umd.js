@@ -96,6 +96,26 @@
         }
     }
 
+    class SignatureEventTarget {
+        constructor() {
+            try {
+                this._et = new EventTarget();
+            }
+            catch (error) {
+                this._et = document;
+            }
+        }
+        addEventListener(type, listener, options) {
+            this._et.addEventListener(type, listener, options);
+        }
+        dispatchEvent(event) {
+            return this._et.dispatchEvent(event);
+        }
+        removeEventListener(type, callback, options) {
+            this._et.removeEventListener(type, callback, options);
+        }
+    }
+
     function throttle(fn, wait = 250) {
         let previous = 0;
         let timeout = null;
@@ -135,7 +155,7 @@
         };
     }
 
-    class SignaturePad extends EventTarget {
+    class SignaturePad extends SignatureEventTarget {
         constructor(canvas, options = {}) {
             super();
             this.canvas = canvas;
@@ -188,10 +208,9 @@
                 }
             };
             this._handlePointerEnd = (event) => {
-                this._drawningStroke = false;
-                const wasCanvasTouched = event.target === this.canvas;
-                if (wasCanvasTouched) {
+                if (this._drawningStroke) {
                     event.preventDefault();
+                    this._drawningStroke = false;
                     this._strokeEnd(event);
                 }
             };
@@ -255,6 +274,7 @@
         on() {
             this.canvas.style.touchAction = 'none';
             this.canvas.style.msTouchAction = 'none';
+            this.canvas.style.userSelect = 'none';
             const isIOS = /Macintosh/.test(navigator.userAgent) && 'ontouchstart' in document;
             if (window.PointerEvent && !isIOS) {
                 this._handlePointerEvents();
@@ -269,6 +289,7 @@
         off() {
             this.canvas.style.touchAction = 'auto';
             this.canvas.style.msTouchAction = 'auto';
+            this.canvas.style.userSelect = 'auto';
             this.canvas.removeEventListener('pointerdown', this._handlePointerStart);
             this.canvas.removeEventListener('pointermove', this._handlePointerMove);
             document.removeEventListener('pointerup', this._handlePointerEnd);
