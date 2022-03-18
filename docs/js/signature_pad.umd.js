@@ -1,6 +1,6 @@
 /*!
  * Signature Pad v4.1.0 | https://github.com/mightymop/signature_pad
- * (c) 2021 Szymon Nowak | Released under the MIT license
+ * (c) 2022 Szymon Nowak | Released under the MIT license
  */
 
 (function (global, factory) {
@@ -491,7 +491,9 @@
         }
         getColor(colorstring, pressure) {
             if (this.colorChange && this._pointerType === 'pen') {
-                let color = colorstring != '#000000' ? this.ColorLuminance(colorstring, (1 - this.colorChangeThreeshold)) : '#AAAAAA';
+                let color = colorstring != '#000000'
+                    ? this.ColorLuminance(colorstring, 1 - this.colorChangeThreeshold)
+                    : '#AAAAAA';
                 if (pressure > this.colorChangeThreeshold) {
                     color = this.ColorLuminance(color, pressure * -1);
                 }
@@ -507,11 +509,11 @@
                 hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
             }
             lum = lum || 0;
-            let rgb = "#", c, i;
+            let rgb = '#', c, i;
             for (i = 0; i < 3; i++) {
                 c = parseInt(hex.substr(i * 2, 2), 16);
-                c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
-                rgb += ("00" + c).substr(c.length);
+                c = Math.round(Math.min(Math.max(0, c + c * lum), 255)).toString(16);
+                rgb += ('00' + c).substr(c.length);
             }
             return rgb;
         }
@@ -569,8 +571,13 @@
                         `${curve.control2.x.toFixed(3)},${curve.control2.y.toFixed(3)} ` +
                         `${curve.endPoint.x.toFixed(3)},${curve.endPoint.y.toFixed(3)}`;
                     path.setAttribute('d', attr);
-                    path.setAttribute('stroke-width', this.widthChange && this._pointerType === 'pen' ? (curve.endWidth * ((this.widthMultiplier * 2.25) * curve.endPoint.pressure)).toFixed(3) : (curve.endWidth * 2.25).toFixed(3));
-                    path.setAttribute('stroke', this.colorChange && this._pointerType === 'pen' ? this.getColor(penColor, curve.endPoint.pressure) : penColor);
+                    path.setAttribute('stroke-width', this.widthChange && this._pointerType === 'pen'
+                        ? (curve.endWidth *
+                            (this.widthMultiplier * 2.25 * curve.endPoint.pressure)).toFixed(3)
+                        : (curve.endWidth * 2.25).toFixed(3));
+                    path.setAttribute('stroke', this.colorChange && this._pointerType === 'pen'
+                        ? this.getColor(penColor, curve.endPoint.pressure)
+                        : penColor);
                     path.setAttribute('fill', 'none');
                     path.setAttribute('stroke-linecap', 'round');
                     svg.appendChild(path);
@@ -578,11 +585,16 @@
             }, (point, { penColor, dotSize, minWidth, maxWidth }) => {
                 const circle = document.createElement('circle');
                 let size = dotSize > 0 ? dotSize : (minWidth + maxWidth) / 2;
-                size = this.widthChange && this._pointerType === 'pen' ? size * point.pressure * (this.widthMultiplier * 2.25) : size;
+                size =
+                    this.widthChange && this._pointerType === 'pen'
+                        ? size * point.pressure * (this.widthMultiplier * 2.25)
+                        : size;
                 circle.setAttribute('r', size.toString());
                 circle.setAttribute('cx', point.x.toString());
                 circle.setAttribute('cy', point.y.toString());
-                circle.setAttribute('fill', this.colorChange && this._pointerType === 'pen' ? this.getColor(penColor, point.pressure) : penColor);
+                circle.setAttribute('fill', this.colorChange && this._pointerType === 'pen'
+                    ? this.getColor(penColor, point.pressure)
+                    : penColor);
                 svg.appendChild(circle);
             });
             const prefix = 'data:image/svg+xml;base64,';
